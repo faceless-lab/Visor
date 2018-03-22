@@ -5,11 +5,13 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
+	"time"
 )
 
 const port string = ":8787" // port number
 const bufSize int = 4096    // websocket buffer size
 const fps byte = 60
+const timeout = 50 * time.Millisecond
 
 var frameQueue = make(chan []byte, fps)
 
@@ -38,7 +40,12 @@ func ws(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		frameQueue <- buf
+		select {
+		case frameQueue <- buf:
+		case <-time.After(timeout):
+			continue
+		}
+
 	}
 
 }
@@ -52,10 +59,15 @@ func screen(rw http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	for {
-		buf := <-frameQueue
-		if err := conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
+		select {
+		case buf := <-frameQueue:
+			if err := conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
+				continue
+			}
+		case <-time.After(timeout):
 			continue
 		}
+
 	}
 
 }

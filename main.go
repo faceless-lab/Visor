@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"html/template"
 	"log"
 	"net/http"
 	"time"
@@ -21,8 +22,9 @@ var upgrader = websocket.Upgrader{
 	EnableCompression: true,
 }
 
-func index(rw http.ResponseWriter, req *http.Request) {
-	rw.Write([]byte("hello, world"))
+func index(rw http.ResponseWriter, r *http.Request) {
+	t, _ := template.ParseFiles("templates/index.html")
+	t.Execute(rw, nil)
 }
 
 func ws(rw http.ResponseWriter, r *http.Request) {
@@ -51,32 +53,39 @@ func ws(rw http.ResponseWriter, r *http.Request) {
 }
 
 func screen(rw http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(rw, r, nil)
+	conn, err := upgrader.Upgrade(rw, r, rw.Header())
 	if err != nil {
 		rw.Write([]byte(err.Error()))
 		return
 	}
-	defer conn.Close()
 
-	for {
-		select {
-		case buf := <-frameQueue:
-			if err := conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
+	go func() {
+		defer conn.Close()
+
+		for {
+			select {
+			case buf := <-frameQueue:
+				if err := conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
+					continue
+				}
+			case <-time.After(timeout):
 				continue
 			}
-		case <-time.After(timeout):
-			continue
+
 		}
-
-	}
-
+	}()
 }
 
 func main() {
 	r := mux.NewRouter()
-	r.HandleFunc("/", index)
+
 	r.HandleFunc("/ws", ws)
-	r.HandleFunc("screen", screen)
+	r.HandleFunc("/screen", screen)
+	r.HandleFunc("/", index)
+
+	r.PathPrefix("/").
+		Handler(http.StripPrefix("/", http.FileServer(http.Dir("static/"))))
+
 	log.Printf("Starting server at %s", port)
 	if err := http.ListenAndServe(port, r); err != nil {
 		log.Fatal(err)

@@ -1,5 +1,6 @@
+### Idea ###
 
-# Created by https://www.gitignore.io/api/go,osx,intellij
+.idea/
 
 ### Go ###
 # Binaries for programs and plugins

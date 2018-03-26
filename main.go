@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Visor/buffer"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"html/template"
@@ -9,12 +10,11 @@ import (
 	"time"
 )
 
-const port string = ":8787" // port number
-const bufSize int = 4096    // websocket buffer size
-const fps byte = 60
+const port = ":8787" // port number
+const bufSize = 4096 // websocket buffer size
 const timeout = 50 * time.Millisecond
 
-var frameQueue = make(chan []byte, fps)
+var frameBuffer = buffer.GetInstance()
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:    bufSize,
@@ -43,13 +43,12 @@ func ws(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		select {
-		case frameQueue <- buf:
+		case frameBuffer.Buffer <- buf:
 		case <-time.After(timeout):
 			continue
 		}
 
 	}
-
 }
 
 func screen(rw http.ResponseWriter, r *http.Request) {
@@ -64,7 +63,7 @@ func screen(rw http.ResponseWriter, r *http.Request) {
 
 		for {
 			select {
-			case buf := <-frameQueue:
+			case buf := <-frameBuffer.Buffer:
 				if err := conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
 					continue
 				}
